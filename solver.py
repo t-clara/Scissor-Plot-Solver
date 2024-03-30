@@ -11,10 +11,16 @@ Courses: AE ADSEE-III, TU Delft
 import numpy as np
 import matplotlib.pyplot as plt
 from tabulate import tabulate
+import sys # to access the system
+import cv2
+import ctypes
 
 
 class ScissorPlotSolver:
-    def __init__(self):
+    def __init__(self, name_aircraft: str, flap_type: str):
+        self.name_aircraft = name_aircraft
+        self.flap_type = flap_type
+
         print("Initializing ScissorPlotSolver...\n")
         '''
         === Fuselage ===
@@ -78,6 +84,33 @@ class ScissorPlotSolver:
         self.M_cruise_tail                 = self.M_cruise * 0.9  # randomized
         self.eta                           = 0.95
 
+    # def show_images(self, filepath: str, filename: str):
+    #     image_width = 800
+    #     image_height = 600
+    #     img = cv2.imread(filepath, cv2.IMREAD_ANYCOLOR)
+    #     img = cv2.resize(img, (image_width, image_height))
+    #     cv2.imshow(filename, img)
+    #     cv2.waitKey(0)
+    #     #sys.exit()
+        
+    def get_screen_resolution(self):
+        user32 = ctypes.windll.user32
+        return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+
+    def show_images(self, filepath: str, filename: str):
+        screen_width, screen_height = self.get_screen_resolution()
+        img = cv2.imread(filepath, cv2.IMREAD_ANYCOLOR)
+        # Calculate scaling factor to fit the image within the screen size
+        scale_factor = min(screen_width / img.shape[1], screen_height / img.shape[0]) * 0.65
+        # Resize the image while maintaining aspect ratio
+        
+        resized_img = cv2.resize(img, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
+        top = 0
+        left = screen_width - resized_img.shape[1]        
+        cv2.imshow(filename, resized_img)
+        cv2.moveWindow(filename, left, top)
+        cv2.waitKey(0)
+
     def initialize_sweep(self):
         self.c_r = (2 * self.S) / (self.b * (1 + self.taper_ratio))
         self.c_t = self.c_r * self.taper_ratio
@@ -105,6 +138,7 @@ class ScissorPlotSolver:
             raise ValueError("Use one of the valid keys: 'full moving', 'adjustable', 'fixed'\n")
         
     def display_info_x_ac(self, M):
+        print("\n=== INFORMATION DISPLAY FOR TORENBEEK PLOTS ===\n")
         print(f"Displaying information required for reading of 'Fig. E-10. Aerodynamic center of lifting surfaces at subsonic speeds (Ref. E-31). (Source: Torenbeek)'...")
         print(f"Use printed parameters to read corresponding curves and determined the aerodynamic center of the primary wing...")
         beta = np.sqrt(1 - M**2)
@@ -116,6 +150,11 @@ class ScissorPlotSolver:
             ["Λ_β [deg]", lambda_beta],
         ]
         print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
+
+        filepath = "images\Torenbeek_Wing_Fuselage_AC.png"
+        filename = "Torenbeek Wing Fuselage Aerodynamic Center Relation"
+
+        self.show_images(filepath=filepath, filename=filename)
 
         while True:
             try:
@@ -129,7 +168,7 @@ class ScissorPlotSolver:
         beta = np.sqrt(1 - M**2)
         CL_alpha = (2 * np.pi * A) / (2 + np.sqrt(4 + ((A * beta) / self.eta)**2 * (1 + (np.tan(self.sweep_half)**2)/(beta**2))))
         return CL_alpha
-
+    
     def solve_stability(self):
         '''
         === Calling DATCOM Method ===
@@ -206,6 +245,7 @@ class ScissorPlotSolver:
         '''
         > (1) Primary Wing <
         '''
+        #TODO: CHOOSE AIRFOIL
         # (1) Approximation:
         airfoil_camber = 0.022
         airfoil_thickness = 0.12
@@ -224,30 +264,6 @@ class ScissorPlotSolver:
         mu_2: flap_span/wing_span, taper_ratio
         mu_3: flap_span/wing_span, taper_ratio
         '''
-        while True:
-            try:
-                self.mu_1= float(input("\nInput mu_1 value read from Torenbeek plot: "))
-                break
-            except ValueError:
-                print("ValueError: Enter a valid floating point number.\n")
-                continue
-
-        while True:
-            try:
-                self.mu_2= float(input("\nInput mu_1 value read from Torenbeek plot: "))
-                break
-            except ValueError:
-                print("ValueError: Enter a valid floating point number.\n")
-                continue
-
-        while True:
-            try:
-                self.mu_3= float(input("\nInput mu_1 value read from Torenbeek plot: "))
-                break
-            except ValueError:
-                print("ValueError: Enter a valid floating point number.\n")
-                continue
-
         '''
         chord_extension_ratio: (c'/c), Alper's table, 60 degrees plain flap
         delta_Cl_max          =
@@ -255,30 +271,164 @@ class ScissorPlotSolver:
         delta_CL_max: crazy empirical method
         CL_max: landing condition at 60 degree flap deflection, plain flap assumption, 
                 Table 7.2 from Torenbeek
+        deflection_flap: 60 deg
         '''
+        '''
+        === DEFLECTION FLAP ANGLE SETTING ===
+        '''
+        print("=== INFORMATION DISPLAY FOR DEFLECTION FLAP ANGLE SETTING ===")
+        table_data = [
+            ["Flap Type", self.flap_type]
+        ]
+        print(tabulate(table_data, headers=["Category", "Value"], tablefmt="grid"))
 
+        filepath = "images\Table_7.2.png"
+        filename = "Flap Deflection Setting"
+        self.show_images(filepath=filepath, filename=filename)
+
+        while True:
+            try:
+                self.deflection_angle = float(input("\nInput δ_f [deg]: "))
+                entry = float(input("\nInput CL_max / cos(Λ_.25): "))
+                self.CL_max = entry * np.cos(self.sweep_quarter)
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+    
         chord_extension_ratio = 1.9 
-        delta_Cl_max          =
+        # delta_Cl_max          =
         flapped_ref_ratio     = 1.0
-        ###
-        cl_delta_max = 
-        eta_max = 
-        eta_delta = 
-        eta_f = 
-        ###
-        delta_CL_max          = cl_delta_max * eta_max * eta_delta * eta_f * chord_extension_ratio
-        CL_max                = 2.00 * np.cos(self.sweep_quarter)
 
-        delta_Cm_quarter_flaps = self.mu_2 * (-self.mu_1 * delta_Cl_max * chord_extension_ratio - (CL_max + delta_Cl_max * (1 - flapped_ref_ratio)) * (1/8) * chord_extension_ratio * (chord_extension_ratio - 1)) + 0.7 * (self.A / (1 + 2 / self.A)) * self.mu_3 * delta_Cl_max * np.tan(self.sweep_quarter)
+        flap_span = 0.3 * self.b # i made it up
+
+        c_prime = chord_extension_ratio * self.c_r # root chord, MAC chord?
+        chord_flap = 0.3 * self.c_r # i made it up
+
+        print("\n=== INFORMATION DISPLAY FOR TORENBEEK PLOTS ===\n")
+
+        table_data = [
+            ["(cf/c')", chord_flap / c_prime],
+            ["FLAP SPAN / WING SPAN", flap_span / self.b],
+            ["λ", self.taper_ratio],
+            ["Flap Type", self.flap_type]
+        ]
+        print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
+
+        filepath = "images\mu_1.jpg"
+        filename = "mu_1: Torenbeek Statistical Method"
+        self.show_images(filepath=filepath, filename=filename)
+
+        while True:
+            try:
+                self.mu_1= float(input("\nInput μ1 value read from Torenbeek plot: "))
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+
+        filepath = "images\mu_2.png"
+        filename = "mu_2: Torenbeek Statistical Method"
+        self.show_images(filepath=filepath, filename=filename)
+
+        while True:
+            try:
+                self.mu_2= float(input("\nInput μ2 value read from Torenbeek plot: "))
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+
+        filepath = "images\mu_3.png"
+        filename = "mu_3: Torenbeek Statistical Method"
+        self.show_images(filepath=filepath, filename=filename)
+
+        while True:
+            try:
+                self.delta_CL_max_base= float(input("\nInput μ3 value read from Torenbeek plot: "))
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+
+        print("\n=== INFORMATION DISPLAY FOR 1978 DATCOM PLOTS ===\n")
+
+        table_data = [
+            ["(cf/c)", chord_flap / self.MAC],
+            ["δ_f [deg]", self.deflection_angle],
+            ["(t/c)", self.thickness_chord_ratio_average],
+            ["Flap Type", self.flap_type]
+        ]
+        print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
+        '''
+        === ΔCL_max_base ===
+        '''
+        filepath = "images\Fig_8.11.png"
+        filename = "Delta_CL_max_base: 1978 DATCOM Method"
+        self.show_images(filepath=filepath, filename=filename)
+
+        while True:
+            try:
+                self.delta_CL_max_base = float(input("\nInput ΔCL_max_base value read from 1978 DATCOM method: "))
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+        '''
+        === k1 ===
+        '''
+        filepath = "images\Fig_8.12.png"
+        filename = "k1: 1978 DATCOM Method"
+        self.show_images(filepath=filepath, filename=filename)
+
+        while True:
+            try:
+                self.k1= float(input("\nInput k1 value read from 1978 DATCOM method: "))
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+        '''
+        === k2 ===
+        '''
+        filepath = "images\Fig_8.13.png"
+        filename = "k2: 1978 DATCOM Method"
+        self.show_images(filepath=filepath, filename=filename)
+
+        while True:
+            try:
+                self.k2 = float(input("\nInput k2 value read from 1978 DATCOM method: "))
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+        '''
+        === k3 ===
+        '''
+        filepath = "images\Fig_8.14.png"
+        filename = "k3: 1978 DATCOM Method"
+        self.show_images(filepath=filepath, filename=filename)
+
+        while True:
+            try:
+                self.k3 = float(input("\nInput k3 value read from 1978 DATCOM method: "))
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+
+        delta_CL_max          = self.delta_CL_max_base * self.k1 * self.k2 * self.k3
+        Cl_max = 
+        CL_max_clean = 
+        delta_Cl_max = (self.CL_max / Cl_max) * CL_max_clean + delta_CL_max
+
+        delta_Cm_quarter_flaps = self.mu_2 * (-self.mu_1 * delta_Cl_max * chord_extension_ratio - (self.CL_max + delta_Cl_max * (1 - flapped_ref_ratio)) * (1/8) * chord_extension_ratio * (chord_extension_ratio - 1)) + 0.7 * (self.A / (1 + 2 / self.A)) * self.mu_3 * delta_Cl_max * np.tan(self.sweep_quarter)
         delta_Cm_ac_flaps = delta_Cm_quarter_flaps - delta_CL_max
-
         
-        deflection_flaps = 
-        
-        CL_0 = 1.6
         '''
         > (3) Fuselage <
         '''
+        CL_0 = 1.6
         fuselage_contribution = -1.8 * (1 - 2.5 * self.b_f / self.l_f) * ((np.pi * self.b_f * self.h_f * self.l_f)/(4 * self.S / self.MAC)) * (CL_0 / self.CL_alpha_Ah)
         
         '''
@@ -289,9 +439,9 @@ class ScissorPlotSolver:
         
         '''
         > Final Equation <
+        Note that 'self.deflection_flap' in [deg], requires conversion to [rad]
         '''
-        flaps_contribution = delta_Cm_ac_flaps * deflection_flaps
-
+        flaps_contribution = delta_Cm_ac_flaps * self.deflection_flap * (np.pi / 180)
         Cm_ac = Cm_ac_w + flaps_contribution + fuselage_contribution + nacelle_contribution
 
         print(f"Displaying information required for reading of lift coefficient of a T-tail (Sh/S=1) for various HLD settings (cruise, take off and landing). (Source: Obert AE4-211 31.8)'...\n")
@@ -326,7 +476,7 @@ class ScissorPlotSolver:
         y_s_SM = self.m_s * x + self.q_s_SM
         y_s = self.m_s * x + self.q_s
         y_c = self.m_c * x + self.q_c
-        plt.title('Scissor Plot - Fokker 100')
+        plt.title(f'Scissor Plot - {self.name_aircraft}')
         plt.xlabel('xcg/MAC [-]')
         plt.ylabel('Sh/S [-]')
         plt.plot(x/self.MAC, y_s_SM, label=f'Stability Curve, SM={self.SM}')
