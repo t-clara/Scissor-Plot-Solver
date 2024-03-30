@@ -16,7 +16,7 @@ import unittest
 
 
 if __name__ == '__main__':
-    solver = ScissorPlotSolver(name_aircraft="Fokker 100", flap_type="Double-Slotted Krueger Flaps", airfoil_series="NACA 43012A")
+    solver = ScissorPlotSolver(name_aircraft="Fokker 100", flap_type="Double-Slotted Krueger Flaps", airfoil_series="NACA 43012A", show=True)
     solver.initialize_sweep()
     solver.velocity_ratio('T-tail and canard')
     solver.display_info_x_ac(M=solver.M_cruise)

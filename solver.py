@@ -17,10 +17,11 @@ import ctypes
 
 
 class ScissorPlotSolver:
-    def __init__(self, name_aircraft: str, flap_type: str, airfoil_series: str):
+    def __init__(self, name_aircraft: str, flap_type: str, airfoil_series: str, show: bool):
         self.name_aircraft = name_aircraft
         self.flap_type = flap_type
         self.airfoil_series = airfoil_series
+        self.show = show
 
         print("Initializing ScissorPlotSolver...\n")
         '''
@@ -128,9 +129,10 @@ class ScissorPlotSolver:
         else:
             raise ValueError("Use one of the valid keys: 'full moving', 'adjustable', 'fixed'\n")
     
-    def delta_y(self, key: str):
+    def delta_y(self):
         while True:
-            try:
+            key = input("\nInput NACA Series: ")
+            if key in ['4', '5', '63', '64', '65', '66']: 
                 if key == '4':
                     return 26.0
                 if key == '5':
@@ -143,9 +145,8 @@ class ScissorPlotSolver:
                     return 19.3
                 if key == '66':
                     return 18.3
-            except ValueError:
+            else:
                 print("Use one of the valid keys: '4', '5', '63', '64', '65', '66'.\n")
-                continue
         
     def display_info_x_ac(self, M):
         print("\n=== INFORMATION DISPLAY FOR TORENBEEK PLOTS ===\n")
@@ -161,10 +162,10 @@ class ScissorPlotSolver:
         ]
         print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
 
-        filepath = "images\Torenbeek_Wing_Fuselage_AC.png"
-        filename = "Torenbeek Wing Fuselage Aerodynamic Center Relation"
-
-        self.show_images(filepath=filepath, filename=filename)
+        if self.show:
+            filepath = "images\Torenbeek_Wing_Fuselage_AC.png"
+            filename = "Torenbeek Wing Fuselage Aerodynamic Center Relation"
+            self.show_images(filepath=filepath, filename=filename)
 
         while True:
             try:
@@ -291,13 +292,14 @@ class ScissorPlotSolver:
         ]
         print(tabulate(table_data, headers=["Category", "Value"], tablefmt="grid"))
 
-        filepath = "images\Table_7.2.png"
-        filename = "Flap Deflection Setting"
-        self.show_images(filepath=filepath, filename=filename)
+        if self.show:
+            filepath = "images\Table_7.2.png"
+            filename = "Flap Deflection Setting"
+            self.show_images(filepath=filepath, filename=filename)
 
         while True:
             try:
-                self.deflection_angle = float(input("\nInput δ_f [deg]: "))
+                self.deflection_flap = float(input("\nInput δ_f [deg]: "))
                 entry = float(input("\nInput CL_max / cos(Λ_.25): "))
                 self.CL_max = entry * np.cos(self.sweep_quarter)
                 break
@@ -321,9 +323,10 @@ class ScissorPlotSolver:
         ]
         print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
 
-        filepath = "images\mu_1.jpg"
-        filename = "mu_1: Torenbeek Statistical Method"
-        self.show_images(filepath=filepath, filename=filename)
+        if self.show:
+            filepath = "images\mu_1.jpg"
+            filename = "mu_1: Torenbeek Statistical Method"
+            self.show_images(filepath=filepath, filename=filename)
 
         while True:
             try:
@@ -333,9 +336,10 @@ class ScissorPlotSolver:
                 print("ValueError: Enter a valid floating point number.\n")
                 continue
 
-        filepath = "images\mu_2.png"
-        filename = "mu_2: Torenbeek Statistical Method"
-        self.show_images(filepath=filepath, filename=filename)
+        if self.show:
+            filepath = "images\mu_2.png"
+            filename = "mu_2: Torenbeek Statistical Method"
+            self.show_images(filepath=filepath, filename=filename)
 
         while True:
             try:
@@ -345,9 +349,10 @@ class ScissorPlotSolver:
                 print("ValueError: Enter a valid floating point number.\n")
                 continue
 
-        filepath = "images\mu_3.png"
-        filename = "mu_3: Torenbeek Statistical Method"
-        self.show_images(filepath=filepath, filename=filename)
+        if self.show:
+            filepath = "images\mu_3.png"
+            filename = "mu_3: Torenbeek Statistical Method"
+            self.show_images(filepath=filepath, filename=filename)
 
         while True:
             try:
@@ -361,7 +366,7 @@ class ScissorPlotSolver:
 
         table_data = [
             ["(cf/c)", chord_flap / self.MAC],
-            ["δ_f [deg]", self.deflection_angle],
+            ["δ_f [deg]", self.deflection_flap],
             ["(t/c)", self.thickness_chord_ratio_average],
             ["Flap Type", self.flap_type]
         ]
@@ -369,9 +374,10 @@ class ScissorPlotSolver:
         '''
         === ΔCL_max_base ===
         '''
-        filepath = "images\Fig_8.11.png"
-        filename = "Delta_CL_max_base: 1978 DATCOM Method"
-        self.show_images(filepath=filepath, filename=filename)
+        if self.show:
+            filepath = "images\Fig_8.11.png"
+            filename = "Delta_CL_max_base: 1978 DATCOM Method"
+            self.show_images(filepath=filepath, filename=filename)
 
         while True:
             try:
@@ -383,9 +389,10 @@ class ScissorPlotSolver:
         '''
         === k1 ===
         '''
-        filepath = "images\Fig_8.12.png"
-        filename = "k1: 1978 DATCOM Method"
-        self.show_images(filepath=filepath, filename=filename)
+        if self.show:
+            filepath = "images\Fig_8.12.png"
+            filename = "k1: 1978 DATCOM Method"
+            self.show_images(filepath=filepath, filename=filename)
 
         while True:
             try:
@@ -397,9 +404,10 @@ class ScissorPlotSolver:
         '''
         === k2 ===
         '''
-        filepath = "images\Fig_8.13.png"
-        filename = "k2: 1978 DATCOM Method"
-        self.show_images(filepath=filepath, filename=filename)
+        if self.show:
+            filepath = "images\Fig_8.13.png"
+            filename = "k2: 1978 DATCOM Method"
+            self.show_images(filepath=filepath, filename=filename)
 
         while True:
             try:
@@ -411,9 +419,10 @@ class ScissorPlotSolver:
         '''
         === k3 ===
         '''
-        filepath = "images\Fig_8.14.png"
-        filename = "k3: 1978 DATCOM Method"
-        self.show_images(filepath=filepath, filename=filename)
+        if self.show:   
+            filepath = "images\Fig_8.14.png"
+            filename = "k3: 1978 DATCOM Method"
+            self.show_images(filepath=filepath, filename=filename)
 
         while True:
             try:
@@ -431,8 +440,7 @@ class ScissorPlotSolver:
         print("\n=== CALCULATION Δy ===\n")
         print(f"Currently using a {self.airfoil_series} airfoil...")
 
-        entry = input("\nInput NACA Series: ")
-        self.delta_y_coeff = self.delta_y(entry)
+        self.delta_y_coeff = self.delta_y()
         self.delta_y = self.delta_y_coeff * self.thickness_chord_ratio_average
 
         '''
@@ -445,9 +453,10 @@ class ScissorPlotSolver:
         ]
         print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
 
-        filepath = "images\Fig_8.9.png"
-        filename = "RATIO (CL_max / Cl_max)"
-        self.show_images(filepath=filepath, filename=filename)
+        if self.show:
+            filepath = "images\Fig_8.9.png"
+            filename = "RATIO (CL_max / Cl_max)"
+            self.show_images(filepath=filepath, filename=filename)
 
         while True:
             try:
@@ -490,6 +499,11 @@ class ScissorPlotSolver:
         ]
         print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
 
+        if self.show:
+            filepath = "images\Obert.png"
+            filename = "Obert Plot"
+            self.show_images(filepath=filepath, filename=filename)
+
         while True:
             try:
                 self.CL_Ah= float(input("\nInput CL_Ah value read from the Obert plot: "))
@@ -514,15 +528,6 @@ class ScissorPlotSolver:
         y_s_SM = self.m_s * x + self.q_s_SM
         y_s = self.m_s * x + self.q_s
         y_c = self.m_c * x + self.q_c
-
-        # x_s_SM = (y_s_SM - self.q_s) / self.m_s
-        # x_c = (y_c - self.q_c) / self.m_c
-
-        # delta_x_cg = x_s_SM - x_c
-
-        for i, enumerate in delta_x_cg:
-            if np.isclose(delta_x_cg, 0.2):
-                print(i)
 
         plt.title(f'Scissor Plot - {self.name_aircraft}')
         plt.xlabel('xcg/MAC [-]')
