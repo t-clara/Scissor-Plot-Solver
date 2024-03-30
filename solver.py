@@ -1,0 +1,337 @@
+'''
+========= Scissor Plot Solver =========
+Applications: Stability and controllability curve generation
+              of various configurations of existing conventional
+              aircrafts
+Authors: Thibault Clara
+Courses: AE ADSEE-III, TU Delft
+'''
+
+# Packages
+import numpy as np
+import matplotlib.pyplot as plt
+from tabulate import tabulate
+
+
+class ScissorPlotSolver:
+    def __init__(self):
+        print("Initializing ScissorPlotSolver...\n")
+        '''
+        === Fuselage ===
+        l_f: fuselage length [m]
+        b_f: exterior cabin width [m]
+        h_f: inner cabin height [m]
+        l_fn: distance to leading edge of wing at root [m]
+        '''
+        self.l_f                           = 32.5
+        self.b_f                           = 3.3 
+        self.h_f                           = 2.01 
+        self.l_fn                          = 14 
+
+        '''
+        === Main Wing ===
+        S: surface area of primary wing [m^2]
+        S_net:
+        b: span of primary wing [m]
+        MAC: mean aerodynamic chord, denoted as x_bar [m]
+        A: aspect ratio [-]
+        taper_ratio: taper from root to tip, denoted as lambda [-]
+        thickness_chord_ratio_average: (t/c)_average [-]
+        sweep_quarter: quarter root chord sweep [rad]
+        '''
+        self.S                             = 93.5
+        self.S_net                         = 0.9 * self.S # don't know how to compute this yet
+        self.b                             = 28.08 
+        self.MAC                           = 3.8
+        self.A                             = 8.43 
+        self.taper_ratio                   = 0.235 
+        self.thickness_chord_ratio_average = 0.1028 
+        self.sweep_quarter                 = 17.45 * np.pi / 180 
+
+        '''
+        === Horizontal Tail Surface ===
+        S_h: surface area of horizontal tail [m^2]
+        b_h: span of horizontal tail [m]
+        A_h: aspect ratio of horizontal tail [-]
+        taper_ratio_h: taper from root to tip, denoted as lambda [-]
+        sweep_quarter_h: quarter root chord sweep [rad]
+        l_h: tail length, critical sizing parameter [m]
+        Sh_by_S: (Sh/S), ratio of horizontal tail surface to primary wing surface [-]
+        tail_volume: ((S_h*l_h)/(S*MAC)) [-]
+        '''
+        self.S_h                           = 21.72 
+        self.b_h                           = 10.04 
+        self.A_h                           = 4.64
+        self.taper_ratio_h                 = 0.39 
+        self.sweep_quarter_h               = 26 * np.pi / 180 # [rad]
+        self.l_h                           = 16 
+        self.Sh_by_S                       = 0.232
+        self.tail_volume                   = 0.978 
+
+        '''
+        === Cruise Conditions ===
+        M_cruise: Mach number at cruising velocity
+        M_cruise_tail: function of M_cruise, experienced by tail
+        eta: airfoil efficiency assumption, constant obtained from slides
+        '''
+        self.M_cruise                      = 0.77
+        self.M_cruise_tail                 = self.M_cruise * 0.9  # randomized
+        self.eta                           = 0.95
+
+    def initialize_sweep(self):
+        self.c_r = (2 * self.S) / (self.b * (1 + self.taper_ratio))
+        self.c_t = self.c_r * self.taper_ratio
+        self.sweep_LE = np.arctan(np.tan(self.sweep_quarter) + (self.c_r /  (2 * self.b)) * (1 - self.taper_ratio))
+        self.sweep_half = np.arctan((self.b / 2 * np.tan(self.sweep_LE) + ((self.c_t - self.c_r) / 2)) / (self.b / 2))
+
+    def velocity_ratio(self, key: str):
+        if key == 'fuselage-mounted':
+            self.V_ratio = 0.85
+        if key == 'fin-mounted':
+            self.V_ratio = 0.95
+        if key == 'T-tail and canard':
+            self.V_ratio = 1.00
+        else:
+            raise ValueError("Use one of the valid keys: 'fuselage-mounted', 'fin-mounted', 'T-tail and canard'\n")
+        
+    def CL_h(self, key: str):
+        if key == 'full moving':
+            self.CL_h = -1
+        if key == 'adjustable':
+            self.CL_h = -0.8
+        if key == 'fixed':
+            self.CL_h = -0.35 * self.A_h**(1/3)
+        else:
+            raise ValueError("Use one of the valid keys: 'full moving', 'adjustable', 'fixed'\n")
+        
+    def display_info_x_ac(self, M):
+        print(f"Displaying information required for reading of 'Fig. E-10. Aerodynamic center of lifting surfaces at subsonic speeds (Ref. E-31). (Source: Torenbeek)'...")
+        print(f"Use printed parameters to read corresponding curves and determined the aerodynamic center of the primary wing...")
+        beta = np.sqrt(1 - M**2)
+        lambda_beta = np.arctan(np.tan(self.sweep_LE) / beta) * 180 / np.pi
+
+        table_data = [
+            ["βA", beta * self.A],
+            ["λ", self.taper_ratio],
+            ["Λ_β [deg]", lambda_beta],
+        ]
+        print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
+
+        while True:
+            try:
+                self.x_ac_w = float(input("\nInput x_ac/MAC value read from the Torenbeek plot: ")) / self.MAC
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+
+    def CL_alpha_DATCOM(self, A, M):
+        beta = np.sqrt(1 - M**2)
+        CL_alpha = (2 * np.pi * A) / (2 + np.sqrt(4 + ((A * beta) / self.eta)**2 * (1 + (np.tan(self.sweep_half)**2)/(beta**2))))
+        return CL_alpha
+
+    def solve_stability(self):
+        '''
+        === Calling DATCOM Method ===
+        > Solve for CL_alpha of aircraft less tail configuration, 
+        and tail configuration only.
+        '''
+        self.CL_alpha_Ah = self.CL_alpha_w * (1 + 2.15 * self.b_f / self.b) * self.S_net / self.S + np.pi / 2 * self.b_f**2 / self.S
+        CL_alpha_Ah_check = (2 * np.pi * self.A) / (self.A + 2)
+        print(f"\nCHECKING VALIDITY OF CL-ALPHA-A-H:")
+        print(f"Calculated: {self.CL_alpha_Ah}")
+        print(f"Expected Order: {CL_alpha_Ah_check}\n")
+        error_margin = 0.10
+        if CL_alpha_Ah_check * (1.00 - error_margin) < self.CL_alpha_Ah < CL_alpha_Ah_check * (1.00 + error_margin):
+            print("*** SANITY CHECK PASSED ***\n")
+        else: 
+            print("*** SANITY CHECK FAILED ***\n")
+        '''
+        === Aerodynamic Centers Calculation ===
+        '''
+        x_ac_f1 = - (1.8 / self.CL_alpha_Ah) * ((self.b_f * self.h_f * self.l_fn) / (self.S * self.MAC))
+        c_g = self.S / self.b # mean geometric chord
+        x_ac_f2 = (0.273 / (1 + self.taper_ratio)) * ((self.b_f * c_g * (self.b - self.b_f)) / (self.MAC**2 * (self.b + 2.15 * self.b_f))) * np.tan(self.sweep_quarter)
+
+        x_ac = self.x_ac_w + x_ac_f1 + x_ac_f2
+        
+        '''
+        === Downwash Gradient Calculations ===
+        > Geometry derived by hand by Alper & Thibault,
+        requires accompanying diagram.
+        '''
+        i_w = 3 * np.pi / 180 # [rad]
+        h_h = 1.5 # [m]
+        x_LE_root = self.l_fn
+        x_TE_root = x_LE_root + self.c_r
+        R = np.sqrt((self.l_h - (self.c_r - self.x_ac_w - x_LE_root))**2 + (h_h + (self.c_r - self.x_ac_w - x_LE_root) * np.sin(i_w))**2)
+        gamma = np.arcsin(((2 * x_LE_root - x_TE_root + x_ac) * np.sin(i_w)) / self.c_r)
+        beta = np.arccos(((self.l_h + (x_TE_root - 2 * x_LE_root - self.x_ac_w) * np.sin(i_w))) / R)
+        Psi = np.pi - gamma + beta
+        m_tv = 2 * R * np.sin(Psi) / self.b
+        r = 2 * self.l_h / self.b
+
+        K_epsilon_Lambda = (0.1124 + 0.1265 * self.sweep_LE + 0.1766 * self.sweep_LE**2) / (r**2) + 0.1024 / r + 2
+        K_epsilon_Lambda0 = 0.1124 / r**2 + 0.1024 / r + 2
+
+        self.downwash_gradient = (K_epsilon_Lambda / K_epsilon_Lambda0) * ((r / (r**2 + m_tv**2)) * (0.4876 / np.sqrt(r**2 + 0.6319 + m_tv**2)) + (1 + (r**2 / (r**2 + 0.7915 + 5.0734 * m_tv**2))**0.3113)*(1 - np.sqrt(m_tv**2 / (1 + m_tv**2)))) * (self.CL_alpha_w / (np.pi * self.A))
+        downwash_gradient_check = 4/(self.A + 2)
+
+        print(f"\nCHECKING VALIDITY OF DOWNWASH GRADIENT:")
+        print(f"Calculated: {self.downwash_gradient}")
+        print(f"Expected Order: {downwash_gradient_check}\n")
+        error_margin = 0.10
+        if downwash_gradient_check * (1.00 - error_margin) < self.downwash_gradient < downwash_gradient_check * (1.00 + error_margin):
+            print("*** SANITY CHECK PASSED ***\n")
+        else: 
+            print("*** SANITY CHECK FAILED ***\n")
+        '''
+        === Solving Coefficients of Linear Model ===
+        '''
+        self.SM = 0.05 # standard
+        self.m_s = ((self.CL_alpha_h / self.CL_alpha_Ah) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2)**(-1)
+        self.q_s_SM = - (self.x_ac_w - self.SM) / ((self.CL_alpha_h / self.CL_alpha_Ah) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2) 
+        self.q_s = - (self.x_ac_w) / ((self.CL_alpha_h / self.CL_alpha_Ah) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2) 
+    
+    def solve_controllability(self):
+        '''
+        === Moment Coefficient of Aerodynamic Center ===
+        Contributions from:
+        1) Primary Wing
+        2) Flaps 
+        3) Fuselage
+        4) Nacelles
+        '''
+
+        '''
+        > (1) Primary Wing <
+        '''
+        # (1) Approximation:
+        airfoil_camber = 0.022
+        airfoil_thickness = 0.12
+        #Cm_0_airfoil = -np.pi * airfoil_camber / airfoil_thickness
+
+        # (2) Get Actual Value from Database:
+        ## Fokker 100 expected to have Fokker 12.5% airfoil but no data can be found.
+        Cm_0_airfoil = -0.349
+        
+        # Compute:
+        Cm_ac_w = Cm_0_airfoil * ((self.A * np.cos(self.sweep_LE)**2)/(self.A + 2 * np.cos(self.sweep_LE)))
+
+        '''
+        > (2) Flaps <
+        mu_1: flap_chord/extended_wing_chord, deflection angle of flap [deg]
+        mu_2: flap_span/wing_span, taper_ratio
+        mu_3: flap_span/wing_span, taper_ratio
+        '''
+        while True:
+            try:
+                self.mu_1= float(input("\nInput mu_1 value read from Torenbeek plot: "))
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+
+        while True:
+            try:
+                self.mu_2= float(input("\nInput mu_1 value read from Torenbeek plot: "))
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+
+        while True:
+            try:
+                self.mu_3= float(input("\nInput mu_1 value read from Torenbeek plot: "))
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+
+        '''
+        chord_extension_ratio: (c'/c), Alper's table, 60 degrees plain flap
+        delta_Cl_max          =
+        #TODO: flapped_ref_ratio: i made it up
+        delta_CL_max: crazy empirical method
+        CL_max: landing condition at 60 degree flap deflection, plain flap assumption, 
+                Table 7.2 from Torenbeek
+        '''
+
+        chord_extension_ratio = 1.9 
+        delta_Cl_max          =
+        flapped_ref_ratio     = 1.0
+        ###
+        cl_delta_max = 
+        eta_max = 
+        eta_delta = 
+        eta_f = 
+        ###
+        delta_CL_max          = cl_delta_max * eta_max * eta_delta * eta_f * chord_extension_ratio
+        CL_max                = 2.00 * np.cos(self.sweep_quarter)
+
+        delta_Cm_quarter_flaps = self.mu_2 * (-self.mu_1 * delta_Cl_max * chord_extension_ratio - (CL_max + delta_Cl_max * (1 - flapped_ref_ratio)) * (1/8) * chord_extension_ratio * (chord_extension_ratio - 1)) + 0.7 * (self.A / (1 + 2 / self.A)) * self.mu_3 * delta_Cl_max * np.tan(self.sweep_quarter)
+        delta_Cm_ac_flaps = delta_Cm_quarter_flaps - delta_CL_max
+
+        
+        deflection_flaps = 
+        
+        CL_0 = 1.6
+        '''
+        > (3) Fuselage <
+        '''
+        fuselage_contribution = -1.8 * (1 - 2.5 * self.b_f / self.l_f) * ((np.pi * self.b_f * self.h_f * self.l_f)/(4 * self.S / self.MAC)) * (CL_0 / self.CL_alpha_Ah)
+        
+        '''
+        > (4) Nacelles <
+        I have no idea how you would calculate this...
+        '''
+        nacelle_contribution = 0
+        
+        '''
+        > Final Equation <
+        '''
+        flaps_contribution = delta_Cm_ac_flaps * deflection_flaps
+
+        Cm_ac = Cm_ac_w + flaps_contribution + fuselage_contribution + nacelle_contribution
+
+        print(f"Displaying information required for reading of lift coefficient of a T-tail (Sh/S=1) for various HLD settings (cruise, take off and landing). (Source: Obert AE4-211 31.8)'...\n")
+        print(f"Use printed parameters to read corresponding lift coefficients from a wedge at V_min, landing HLD settings...\n")
+        table_data = [
+            ["Cm_ac", Cm_ac],
+            ["CL_h", self.CL_h]
+        ]
+        print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
+
+        while True:
+            try:
+                self.CL_Ah= float(input("\nInput CL_Ah value read from the Obert plot: "))
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+
+        self.m_c = ((self.CL_h / self.CL_Ah) * (self.l_h / self.MAC) * self.V_ratio**2)**(-1)
+        self.q_c = (Cm_ac / self.CL_Ah - self.x_ac_w) / ((self.CL_h / self.CL_Ah) * (self.l_h / self.MAC) * self.V_ratio**2)
+
+    #TODO: Make sure to solve for "delta_x_cg_acceptable" and plot a horizontal line at the point where
+    # the requirement is just met, returning the Sh/S min for satisfying both stability and controllability
+    # curves. 
+    def plot(self):
+        '''
+        y = m*x + q
+        Sh/S = m*x_cg + q
+        Scale x-axis so we obtain x_cg/MAC
+        '''
+        x = np.linspace(0, self.l_f/20, 100)
+        y_s_SM = self.m_s * x + self.q_s_SM
+        y_s = self.m_s * x + self.q_s
+        y_c = self.m_c * x + self.q_c
+        plt.title('Scissor Plot - Fokker 100')
+        plt.xlabel('xcg/MAC [-]')
+        plt.ylabel('Sh/S [-]')
+        plt.plot(x/self.MAC, y_s_SM, label=f'Stability Curve, SM={self.SM}')
+        plt.plot(x/self.MAC, y_s, label=f'Stability Curve, without SM')
+        plt.plot(x/self.MAC, y_c, label=f'Controllability Curve')
+        plt.ylim(0, 1)
+        plt.legend()
+        plt.show()
