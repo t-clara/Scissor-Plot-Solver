@@ -17,9 +17,10 @@ import ctypes
 
 
 class ScissorPlotSolver:
-    def __init__(self, name_aircraft: str, flap_type: str):
+    def __init__(self, name_aircraft: str, flap_type: str, airfoil_series: str):
         self.name_aircraft = name_aircraft
         self.flap_type = flap_type
+        self.airfoil_series = airfoil_series
 
         print("Initializing ScissorPlotSolver...\n")
         '''
@@ -83,15 +84,6 @@ class ScissorPlotSolver:
         self.M_cruise                      = 0.77
         self.M_cruise_tail                 = self.M_cruise * 0.9  # randomized
         self.eta                           = 0.95
-
-    # def show_images(self, filepath: str, filename: str):
-    #     image_width = 800
-    #     image_height = 600
-    #     img = cv2.imread(filepath, cv2.IMREAD_ANYCOLOR)
-    #     img = cv2.resize(img, (image_width, image_height))
-    #     cv2.imshow(filename, img)
-    #     cv2.waitKey(0)
-    #     #sys.exit()
         
     def get_screen_resolution(self):
         user32 = ctypes.windll.user32
@@ -103,7 +95,6 @@ class ScissorPlotSolver:
         # Calculate scaling factor to fit the image within the screen size
         scale_factor = min(screen_width / img.shape[1], screen_height / img.shape[0]) * 0.65
         # Resize the image while maintaining aspect ratio
-        
         resized_img = cv2.resize(img, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
         top = 0
         left = screen_width - resized_img.shape[1]        
@@ -136,6 +127,25 @@ class ScissorPlotSolver:
             self.CL_h = -0.35 * self.A_h**(1/3)
         else:
             raise ValueError("Use one of the valid keys: 'full moving', 'adjustable', 'fixed'\n")
+    
+    def delta_y(self, key: str):
+        while True:
+            try:
+                if key == '4':
+                    return 26.0
+                if key == '5':
+                    return 26.0
+                if key == '63':
+                    return 22.0
+                if key == '64':
+                    return 21.3
+                if key == '65':
+                    return 19.3
+                if key == '66':
+                    return 18.3
+            except ValueError:
+                print("Use one of the valid keys: '4', '5', '63', '64', '65', '66'.\n")
+                continue
         
     def display_info_x_ac(self, M):
         print("\n=== INFORMATION DISPLAY FOR TORENBEEK PLOTS ===\n")
@@ -241,19 +251,20 @@ class ScissorPlotSolver:
         3) Fuselage
         4) Nacelles
         '''
-
         '''
         > (1) Primary Wing <
         '''
         #TODO: CHOOSE AIRFOIL
         # (1) Approximation:
-        airfoil_camber = 0.022
-        airfoil_thickness = 0.12
-        #Cm_0_airfoil = -np.pi * airfoil_camber / airfoil_thickness
+        # airfoil_camber = 0.022
+        # airfoil_thickness = 0.12
+        # Cm_0_airfoil = -np.pi * airfoil_camber / airfoil_thickness
 
         # (2) Get Actual Value from Database:
         ## Fokker 100 expected to have Fokker 12.5% airfoil but no data can be found.
-        Cm_0_airfoil = -0.349
+        print(f"\nRUNNING CALCULATIONS FOR {self.airfoil_series} AIRFOIL...\n")
+        Cm_0_airfoil = -0.013 # MARSKE MONARCH AIRFOIL (NACA 43012A)
+        # Cm_0_airfoil = -0.349, report with NACA 63-415
         
         # Compute:
         Cm_ac_w = Cm_0_airfoil * ((self.A * np.cos(self.sweep_LE)**2)/(self.A + 2 * np.cos(self.sweep_LE)))
@@ -265,13 +276,11 @@ class ScissorPlotSolver:
         mu_3: flap_span/wing_span, taper_ratio
         '''
         '''
-        chord_extension_ratio: (c'/c), Alper's table, 60 degrees plain flap
-        delta_Cl_max          =
+        chord_extension_ratio: (c'/c)
         #TODO: flapped_ref_ratio: i made it up
-        delta_CL_max: crazy empirical method
-        CL_max: landing condition at 60 degree flap deflection, plain flap assumption, 
-                Table 7.2 from Torenbeek
-        deflection_flap: 60 deg
+        delta_CL_max: DATCOM 1978 Method
+        CL_max: Landing condition at given flap deflection using Table 7.2 from Torenbeek
+        deflection_flap: Table 7.2 from Torenbeek
         '''
         '''
         === DEFLECTION FLAP ANGLE SETTING ===
@@ -297,13 +306,10 @@ class ScissorPlotSolver:
                 continue
     
         chord_extension_ratio = 1.9 
-        # delta_Cl_max          =
         flapped_ref_ratio     = 1.0
-
-        flap_span = 0.3 * self.b # i made it up
-
-        c_prime = chord_extension_ratio * self.c_r # root chord, MAC chord?
-        chord_flap = 0.3 * self.c_r # i made it up
+        flap_span             = 0.3 * self.b #TODO: i made it up
+        c_prime               = chord_extension_ratio * self.c_r #TODO: root chord, MAC chord?
+        chord_flap            = 0.3 * self.c_r #TODO: i made it up
 
         print("\n=== INFORMATION DISPLAY FOR TORENBEEK PLOTS ===\n")
 
@@ -333,7 +339,7 @@ class ScissorPlotSolver:
 
         while True:
             try:
-                self.mu_2= float(input("\nInput μ2 value read from Torenbeek plot: "))
+                self.mu_2 = float(input("\nInput μ2 value read from Torenbeek plot: "))
                 break
             except ValueError:
                 print("ValueError: Enter a valid floating point number.\n")
@@ -345,7 +351,7 @@ class ScissorPlotSolver:
 
         while True:
             try:
-                self.delta_CL_max_base= float(input("\nInput μ3 value read from Torenbeek plot: "))
+                self.mu_3 = float(input("\nInput μ3 value read from Torenbeek plot: "))
                 break
             except ValueError:
                 print("ValueError: Enter a valid floating point number.\n")
@@ -418,9 +424,41 @@ class ScissorPlotSolver:
                 continue
 
         delta_CL_max          = self.delta_CL_max_base * self.k1 * self.k2 * self.k3
-        Cl_max = 
-        CL_max_clean = 
-        delta_Cl_max = (self.CL_max / Cl_max) * CL_max_clean + delta_CL_max
+
+        '''
+        === CALCULATION Δy ===
+        '''
+        print("\n=== CALCULATION Δy ===\n")
+        print(f"Currently using a {self.airfoil_series} airfoil...")
+
+        entry = input("\nInput NACA Series: ")
+        self.delta_y_coeff = self.delta_y(entry)
+        self.delta_y = self.delta_y_coeff * self.thickness_chord_ratio_average
+
+        '''
+        === RATIO (CL_max / Cl_max) ===
+        '''
+        print("\n=== INFORMATION DISPLAY FOR RATIO (CL_max / Cl_max) ===\n")
+        table_data = [
+            ["(Δy)", self.delta_y],
+            ["Λ_LE [deg]", self.sweep_LE * 180 / np.pi],
+        ]
+        print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
+
+        filepath = "images\Fig_8.9.png"
+        filename = "RATIO (CL_max / Cl_max)"
+        self.show_images(filepath=filepath, filename=filename)
+
+        while True:
+            try:
+                self.ratio_CL_Cl_max = float(input("\nInput (CL_max / Cl_max): "))
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
+
+        CL_max_clean = 2.55 
+        delta_Cl_max = (self.ratio_CL_Cl_max) * CL_max_clean + delta_CL_max
 
         delta_Cm_quarter_flaps = self.mu_2 * (-self.mu_1 * delta_Cl_max * chord_extension_ratio - (self.CL_max + delta_Cl_max * (1 - flapped_ref_ratio)) * (1/8) * chord_extension_ratio * (chord_extension_ratio - 1)) + 0.7 * (self.A / (1 + 2 / self.A)) * self.mu_3 * delta_Cl_max * np.tan(self.sweep_quarter)
         delta_Cm_ac_flaps = delta_Cm_quarter_flaps - delta_CL_max
@@ -472,10 +510,20 @@ class ScissorPlotSolver:
         Sh/S = m*x_cg + q
         Scale x-axis so we obtain x_cg/MAC
         '''
-        x = np.linspace(0, self.l_f/20, 100)
+        x = np.linspace(0, self.l_f/20, 1000)
         y_s_SM = self.m_s * x + self.q_s_SM
         y_s = self.m_s * x + self.q_s
         y_c = self.m_c * x + self.q_c
+
+        # x_s_SM = (y_s_SM - self.q_s) / self.m_s
+        # x_c = (y_c - self.q_c) / self.m_c
+
+        # delta_x_cg = x_s_SM - x_c
+
+        for i, enumerate in delta_x_cg:
+            if np.isclose(delta_x_cg, 0.2):
+                print(i)
+
         plt.title(f'Scissor Plot - {self.name_aircraft}')
         plt.xlabel('xcg/MAC [-]')
         plt.ylabel('Sh/S [-]')
