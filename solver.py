@@ -49,7 +49,7 @@ class ScissorPlotSolver:
         sweep_quarter: quarter root chord sweep [rad]
         '''
         self.S                             = 93.5
-        self.S_net                         = 0.9 * self.S # don't know how to compute this yet
+        self.S_net                         = self.S - self.c_r * self.b_f
         self.b                             = 28.08 
         self.MAC                           = 3.8
         self.A                             = 8.43 
