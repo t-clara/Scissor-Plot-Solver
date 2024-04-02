@@ -49,13 +49,14 @@ class ScissorPlotSolver:
         sweep_quarter: quarter root chord sweep [rad]
         '''
         self.S                             = 93.5
-        self.S_net                         = self.S - self.c_r * self.b_f
         self.b                             = 28.08 
         self.MAC                           = 3.8
         self.A                             = 8.43 
         self.taper_ratio                   = 0.235 
         self.thickness_chord_ratio_average = 0.1028 
-        self.sweep_quarter                 = 17.45 * np.pi / 180 
+        self.sweep_quarter                 = 17.45 * np.pi / 180
+        self.initialize_sweep()
+        self.S_net                         = self.S - self.c_r * self.b_f 
 
         '''
         === Horizontal Tail Surface ===
@@ -84,9 +85,9 @@ class ScissorPlotSolver:
         eta: airfoil efficiency assumption, constant obtained from slides
         '''
         self.M_landing                     = 0.2
-        self.M_landing_tail                 = self.M_landing * 0.9  # randomized
+        self.M_landing_tail                 = self.M_landing  # randomized
         self.M_cruise                      = 0.77
-        self.M_cruise_tail                 = self.M_cruise * 0.9  # randomized
+        self.M_cruise_tail                 = self.M_cruise  # randomized
         self.eta                           = 0.95
         
     def get_screen_resolution(self):
@@ -227,7 +228,7 @@ class ScissorPlotSolver:
         K_epsilon_Lambda = (0.1124 + 0.1265 * self.sweep_LE + 0.1766 * self.sweep_LE**2) / (r**2) + 0.1024 / r + 2
         K_epsilon_Lambda0 = 0.1124 / r**2 + 0.1024 / r + 2
 
-        self.downwash_gradient = (K_epsilon_Lambda / K_epsilon_Lambda0) * ((r / (r**2 + m_tv**2)) * (0.4876 / np.sqrt(r**2 + 0.6319 + m_tv**2)) + (1 + (r**2 / (r**2 + 0.7915 + 5.0734 * m_tv**2))**0.3113)*(1 - np.sqrt(m_tv**2 / (1 + m_tv**2)))) * (self.CL_alpha_w / (np.pi * self.A))
+        self.downwash_gradient = 0 #(K_epsilon_Lambda / K_epsilon_Lambda0) * ((r / (r**2 + m_tv**2)) * (0.4876 / np.sqrt(r**2 + 0.6319 + m_tv**2)) + (1 + (r**2 / (r**2 + 0.7915 + 5.0734 * m_tv**2))**0.3113)*(1 - np.sqrt(m_tv**2 / (1 + m_tv**2)))) * (self.CL_alpha_w / (np.pi * self.A))
         downwash_gradient_check = 4/(self.A + 2)
 
         print(f"\nCHECKING VALIDITY OF DOWNWASH GRADIENT:")
@@ -494,7 +495,7 @@ class ScissorPlotSolver:
         > (4) Nacelles <
         I have no idea how you would calculate this...
         '''
-        nacelle_contribution = 0
+        nacelle_contribution = 2 * -2.5 * 1.14300 ** 2 * self.l_h / (self.S * self.MAC * self.CL_alpha_Ah)
         
         '''
         > Final Equation <
