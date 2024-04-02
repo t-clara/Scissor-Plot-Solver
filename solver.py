@@ -84,9 +84,9 @@ class ScissorPlotSolver:
         eta: airfoil efficiency assumption, constant obtained from slides
         '''
         self.M_landing                     = 0.2
-        self.M_landing_tail                = self.M_landing * 0.55  # randomized
+        self.M_landing_tail                = self.M_landing * 0.85  # randomized
         self.M_cruise                      = 0.77
-        self.M_cruise_tail                 = self.M_cruise * 0.65  # randomized
+        self.M_cruise_tail                 = self.M_cruise * 0.90  # randomized
         self.eta                           = 0.95
         
     def get_screen_resolution(self):
