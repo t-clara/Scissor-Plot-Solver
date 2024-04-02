@@ -49,7 +49,7 @@ class ScissorPlotSolver:
         sweep_quarter: quarter root chord sweep [rad]
         '''
         self.S                             = 93.5
-        self.S_net                         = 0.9 * self.S # don't know how to compute this yet
+        self.S_net                         = 0.50 * self.S # don't know how to compute this yet
         self.b                             = 28.08 
         self.MAC                           = 3.8
         self.A                             = 8.43 
@@ -84,9 +84,9 @@ class ScissorPlotSolver:
         eta: airfoil efficiency assumption, constant obtained from slides
         '''
         self.M_landing                     = 0.2
-        self.M_landing_tail                 = self.M_landing * 0.9  # randomized
+        self.M_landing_tail                = self.M_landing * 0.55  # randomized
         self.M_cruise                      = 0.77
-        self.M_cruise_tail                 = self.M_cruise * 0.9  # randomized
+        self.M_cruise_tail                 = self.M_cruise * 0.65  # randomized
         self.eta                           = 0.95
         
     def get_screen_resolution(self):
@@ -107,10 +107,20 @@ class ScissorPlotSolver:
         cv2.waitKey(0)
 
     def initialize_sweep(self):
+        '''
+        === PRIMARY WING ===
+        '''
         self.c_r = (2 * self.S) / (self.b * (1 + self.taper_ratio))
         self.c_t = self.c_r * self.taper_ratio
         self.sweep_LE = np.arctan(np.tan(self.sweep_quarter) + (self.c_r /  (2 * self.b)) * (1 - self.taper_ratio))
         self.sweep_half = np.arctan((self.b / 2 * np.tan(self.sweep_LE) + ((self.c_t - self.c_r) / 2)) / (self.b / 2))
+        '''
+        === HORIZONTAL STABILIZER ===
+        '''
+        self.c_r_h = (2 * self.S_h) / (self.b_h * (1 + self.taper_ratio_h))
+        self.c_t_h = self.c_r_h * self.taper_ratio_h
+        self.sweep_LE_h = np.arctan(np.tan(self.sweep_quarter_h) + (self.c_r_h /  (2 * self.b_h)) * (1 - self.taper_ratio_h))
+        self.sweep_half_h = np.arctan((self.b_h / 2 * np.tan(self.sweep_LE_h) + ((self.c_t_h - self.c_r_h) / 2)) / (self.b_h / 2))
 
     def velocity_ratio(self, key: str):
         if key == 'fuselage-mounted':
@@ -150,12 +160,20 @@ class ScissorPlotSolver:
                     return 18.3
             else:
                 print("Use one of the valid keys: '4', '5', '63', '64', '65', '66'.\n")
-        
-    def display_info_x_ac(self, M):
-        print("\n=== INFORMATION DISPLAY FOR TORENBEEK PLOTS ===\n")
+
+    def CL_alpha_DATCOM(self, A, M, sweep_half):
+        beta = np.sqrt(1 - M**2)
+        CL_alpha = (2 * np.pi * A) / (2 + np.sqrt(4 + ((A * beta) / self.eta)**2 * (1 + (np.tan(sweep_half)**2)/(beta**2))))
+        return CL_alpha
+    
+    def solve_stability(self):
+        '''
+        === TORENBEEK PLOTS FOR X_AC CALCULATIONS ====
+        '''
+        print("\n=== INFORMATION DISPLAY FOR TORENBEEK PLOTS, CRUISE & STABILITY ===\n")
         print(f"Displaying information required for reading of 'Fig. E-10. Aerodynamic center of lifting surfaces at subsonic speeds (Ref. E-31). (Source: Torenbeek)'...")
         print(f"Use printed parameters to read corresponding curves and determined the aerodynamic center of the primary wing...")
-        beta = np.sqrt(1 - M**2)
+        beta = np.sqrt(1 - self.M_cruise**2)
         lambda_beta = np.arctan(np.tan(self.sweep_LE) / beta) * 180 / np.pi
 
         table_data = [
@@ -172,54 +190,47 @@ class ScissorPlotSolver:
 
         while True:
             try:
-                self.x_ac_w = float(input("\nInput x_ac/MAC value read from the Torenbeek plot: ")) * self.MAC
+                self.x_ac_w_cruise = float(input("\nInput x_ac/MAC value read from the Torenbeek plot: ")) * self.MAC
                 break
             except ValueError:
                 print("ValueError: Enter a valid floating point number.\n")
                 continue
-
-    def CL_alpha_DATCOM(self, A, M):
-        beta = np.sqrt(1 - M**2)
-        CL_alpha = (2 * np.pi * A) / (2 + np.sqrt(4 + ((A * beta) / self.eta)**2 * (1 + (np.tan(self.sweep_half)**2)/(beta**2))))
-        return CL_alpha
-    
-    def solve_stability(self):
         '''
         === Calling DATCOM Method ===
         > Solve for CL_alpha of aircraft less tail configuration, 
         and tail configuration only.
         '''
-        self.CL_alpha_Ah = self.CL_alpha_w * (1 + 2.15 * self.b_f / self.b) * self.S_net / self.S + np.pi / 2 * self.b_f**2 / self.S
+        self.CL_alpha_Ah_cruise = self.CL_alpha_w_cruise * (1 + 2.15 * self.b_f / self.b) * self.S_net / self.S + np.pi / 2 * self.b_f**2 / self.S
         CL_alpha_Ah_check = (2 * np.pi * self.A) / (self.A + 2)
         print(f"\nCHECKING VALIDITY OF CL-ALPHA-A-H:")
-        print(f"Calculated: {self.CL_alpha_Ah}")
+        print(f"Calculated: {self.CL_alpha_Ah_cruise}")
         print(f"Expected Order: {CL_alpha_Ah_check}\n")
         error_margin = 0.10
-        if CL_alpha_Ah_check * (1.00 - error_margin) < self.CL_alpha_Ah < CL_alpha_Ah_check * (1.00 + error_margin):
+        if CL_alpha_Ah_check * (1.00 - error_margin) < self.CL_alpha_Ah_cruise < CL_alpha_Ah_check * (1.00 + error_margin):
             print("*** SANITY CHECK PASSED ***\n")
         else: 
             print("*** SANITY CHECK FAILED ***\n")
         '''
         === Aerodynamic Centers Calculation ===
         '''
-        x_ac_f1 = - (1.8 / self.CL_alpha_Ah) * ((self.b_f * self.h_f * self.l_fn) / (self.S * self.MAC))
+        x_ac_f1 = - (1.8 / self.CL_alpha_Ah_cruise) * ((self.b_f * self.h_f * self.l_fn) / (self.S * self.MAC))
         c_g = self.S / self.b # mean geometric chord
         x_ac_f2 = (0.273 / (1 + self.taper_ratio)) * ((self.b_f * c_g * (self.b - self.b_f)) / (self.MAC**2 * (self.b + 2.15 * self.b_f))) * np.tan(self.sweep_quarter)
 
-        x_ac = self.x_ac_w + x_ac_f1 + x_ac_f2
+        x_ac = self.x_ac_w_cruise + x_ac_f1 + x_ac_f2
         
         '''
         === Downwash Gradient Calculations ===
         > Geometry derived by hand by Alper & Thibault,
         requires accompanying diagram.
         '''
-        i_w = 3 * np.pi / 180 # [rad]
-        h_h = 1.5 # [m]
+        i_w = 2 * np.pi / 180 # [rad]
+        h_h = 5.0 #3.491261 # [m]
         x_LE_root = self.l_fn
         x_TE_root = x_LE_root + self.c_r
-        R = np.sqrt((self.l_h - (self.c_r - self.x_ac_w - x_LE_root))**2 + (h_h + (self.c_r - self.x_ac_w - x_LE_root) * np.sin(i_w))**2)
+        R = np.sqrt((self.l_h - (self.c_r - self.x_ac_w_cruise - x_LE_root))**2 + (h_h + (self.c_r - self.x_ac_w_cruise - x_LE_root) * np.sin(i_w))**2)
         gamma = np.arcsin(((2 * x_LE_root - x_TE_root + x_ac) * np.sin(i_w)) / self.c_r)
-        beta = np.arccos(((self.l_h + (x_TE_root - 2 * x_LE_root - self.x_ac_w) * np.sin(i_w))) / R)
+        beta = np.arccos(((self.l_h + (x_TE_root - 2 * x_LE_root - self.x_ac_w_cruise) * np.sin(i_w))) / R)
         Psi = np.pi - gamma + beta
         m_tv = 2 * R * np.sin(Psi) / self.b
         r = 2 * self.l_h / self.b
@@ -227,8 +238,10 @@ class ScissorPlotSolver:
         K_epsilon_Lambda = (0.1124 + 0.1265 * self.sweep_LE + 0.1766 * self.sweep_LE**2) / (r**2) + 0.1024 / r + 2
         K_epsilon_Lambda0 = 0.1124 / r**2 + 0.1024 / r + 2
 
-        self.downwash_gradient = (K_epsilon_Lambda / K_epsilon_Lambda0) * ((r / (r**2 + m_tv**2)) * (0.4876 / np.sqrt(r**2 + 0.6319 + m_tv**2)) + (1 + (r**2 / (r**2 + 0.7915 + 5.0734 * m_tv**2))**0.3113)*(1 - np.sqrt(m_tv**2 / (1 + m_tv**2)))) * (self.CL_alpha_w / (np.pi * self.A))
+        #self.downwash_gradient = (K_epsilon_Lambda / K_epsilon_Lambda0) * ((r / (r**2 + m_tv**2)) * (0.4876 / np.sqrt(r**2 + 0.6319 + m_tv**2)) + (1 + (r**2 / (r**2 + 0.7915 + 5.0734 * m_tv**2))**0.3113)*(1 - np.sqrt(m_tv**2 / (1 + m_tv**2)))) * (self.CL_alpha_w_cruise / (np.pi * self.A))
+        self.downwash_gradient = 0
         downwash_gradient_check = 4/(self.A + 2)
+        #self.downwash_gradient = downwash_gradient_check
 
         print(f"\nCHECKING VALIDITY OF DOWNWASH GRADIENT:")
         print(f"Calculated: {self.downwash_gradient}")
@@ -242,13 +255,41 @@ class ScissorPlotSolver:
         === Solving Coefficients of Linear Model ===
         '''
         self.SM = 0.05 # standard
-        self.m_s = ((self.CL_alpha_h / self.CL_alpha_Ah) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2)**(-1)
-        self.q_s_SM = - (self.x_ac_w - self.SM) / ((self.CL_alpha_h / self.CL_alpha_Ah) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2) 
-        self.q_s = - (self.x_ac_w) / ((self.CL_alpha_h / self.CL_alpha_Ah) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2)
-        print(f'This is the difference {self.x_ac_w - self.SM}')
-        print(f'This is x_ac {self.x_ac_w}')
+        self.m_s = ((self.CL_alpha_Ah_cruise / self.CL_alpha_Ah_cruise) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2)**(-1)
+        self.q_s_SM = - (self.x_ac_w_cruise - self.SM) / ((self.CL_alpha_h_cruise / self.CL_alpha_Ah_cruise) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2) 
+        self.q_s = - (self.x_ac_w_cruise) / ((self.CL_alpha_h_cruise / self.CL_alpha_Ah_cruise) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2)
+        print(f'This is the difference {self.x_ac_w_cruise - self.SM}')
+        print(f'This is x_ac {self.x_ac_w_cruise}')
     
     def solve_controllability(self):
+        '''
+        === TORENBEEK PLOTS FOR X_AC CALCULATIONS ====
+        '''
+        print("\n=== INFORMATION DISPLAY FOR TORENBEEK PLOTS, LANDING & CONTROLLABILITY ===\n")
+        print(f"Displaying information required for reading of 'Fig. E-10. Aerodynamic center of lifting surfaces at subsonic speeds (Ref. E-31). (Source: Torenbeek)'...")
+        print(f"Use printed parameters to read corresponding curves and determined the aerodynamic center of the primary wing...")
+        beta = np.sqrt(1 - self.M_landing**2)
+        lambda_beta = np.arctan(np.tan(self.sweep_LE) / beta) * 180 / np.pi
+
+        table_data = [
+            ["βA", beta * self.A],
+            ["λ", self.taper_ratio],
+            ["Λ_β [deg]", lambda_beta],
+        ]
+        print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
+
+        if self.show:
+            filepath = "images\Torenbeek_Wing_Fuselage_AC.png"
+            filename = "Torenbeek Wing Fuselage Aerodynamic Center Relation"
+            self.show_images(filepath=filepath, filename=filename)
+
+        while True:
+            try:
+                self.x_ac_w_landing = float(input("\nInput x_ac/MAC value read from the Torenbeek plot: ")) * self.MAC
+                break
+            except ValueError:
+                print("ValueError: Enter a valid floating point number.\n")
+                continue
         '''
         === Moment Coefficient of Aerodynamic Center ===
         Contributions from:
@@ -316,7 +357,7 @@ class ScissorPlotSolver:
         flap_span             = 0.58 * self.b #TODO: i made it up
         # Thibault Edit: Function of MAC instead
         c_prime               = chord_extension_ratio * self.MAC #TODO: root chord, MAC chord?
-        chord_flap            = 0.3 * self.MAC #TODO: i made it up
+        chord_flap            = 0.30 * self.MAC #TODO: i made it up
         # c_prime               = chord_extension_ratio * self.c_r #TODO: root chord, MAC chord?
         # chord_flap            = 0.3 * self.c_r #TODO: i made it up
 
@@ -473,10 +514,10 @@ class ScissorPlotSolver:
                 print("ValueError: Enter a valid floating point number.\n")
                 continue
 
-        self.x_ac_w = 0.27 * self.MAC
-        self.CL_alpha_w = self.CL_alpha_DATCOM(A=self.A, M=self.M_landing)
-        self.CL_alpha_h = self.CL_alpha_DATCOM(A=self.A_h, M=self.M_landing_tail)
-        self.CL_alpha_Ah = self.CL_alpha_w * (1 + 2.15 * self.b_f / self.b) * self.S_net / self.S + np.pi / 2 * self.b_f**2 / self.S
+        #self.x_ac_w = 0.27 * self.MAC
+        #self.CL_alpha_w = self.CL_alpha_DATCOM(A=self.A, M=self.M_landing)
+        #self.CL_alpha_h = self.CL_alpha_DATCOM(A=self.A_h, M=self.M_landing_tail)
+        self.CL_alpha_Ah_landing = self.CL_alpha_w_landing * (1 + 2.15 * self.b_f / self.b) * self.S_net / self.S + np.pi / 2 * self.b_f**2 / self.S
 
         CL_max_clean = 2.55 
         delta_Cl_max = (self.ratio_CL_Cl_max) * CL_max_clean + delta_CL_max
@@ -488,7 +529,7 @@ class ScissorPlotSolver:
         > (3) Fuselage <
         '''
         CL_0 = 1.6
-        fuselage_contribution = -1.8 * (1 - 2.5 * self.b_f / self.l_f) * ((np.pi * self.b_f * self.h_f * self.l_f)/(4 * self.S * self.MAC)) * (CL_0 / self.CL_alpha_Ah)
+        fuselage_contribution = -1.8 * (1 - 2.5 * self.b_f / self.l_f) * ((np.pi * self.b_f * self.h_f * self.l_f)/(4 * self.S * self.MAC)) * (CL_0 / self.CL_alpha_Ah_landing)
         
         '''
         > (4) Nacelles <
@@ -526,7 +567,7 @@ class ScissorPlotSolver:
                 continue
 
         self.m_c = ((self.CL_h / self.CL_Ah) * (self.l_h / self.MAC) * self.V_ratio**2)**(-1)
-        self.q_c = (Cm_ac / self.CL_Ah - self.x_ac_w) / ((self.CL_h / self.CL_Ah) * (self.l_h / self.MAC) * self.V_ratio**2)
+        self.q_c = (Cm_ac / self.CL_Ah - self.x_ac_w_landing) / ((self.CL_h / self.CL_Ah) * (self.l_h / self.MAC) * self.V_ratio**2)
         
         print("\n=== VERIFICATION KEY VALUES ===\n")
         table_data = [
