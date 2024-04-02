@@ -82,6 +82,8 @@ class ScissorPlotSolver:
         M_cruise_tail: function of M_cruise, experienced by tail
         eta: airfoil efficiency assumption, constant obtained from slides
         '''
+        self.M_landing                     = 0.2
+        self.M_landing_tail                 = self.M_landing * 0.9  # randomized
         self.M_cruise                      = 0.77
         self.M_cruise_tail                 = self.M_cruise * 0.9  # randomized
         self.eta                           = 0.95
@@ -169,7 +171,7 @@ class ScissorPlotSolver:
 
         while True:
             try:
-                self.x_ac_w = float(input("\nInput x_ac/MAC value read from the Torenbeek plot: ")) / self.MAC
+                self.x_ac_w = float(input("\nInput x_ac/MAC value read from the Torenbeek plot: ")) * self.MAC
                 break
             except ValueError:
                 print("ValueError: Enter a valid floating point number.\n")
@@ -241,7 +243,9 @@ class ScissorPlotSolver:
         self.SM = 0.05 # standard
         self.m_s = ((self.CL_alpha_h / self.CL_alpha_Ah) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2)**(-1)
         self.q_s_SM = - (self.x_ac_w - self.SM) / ((self.CL_alpha_h / self.CL_alpha_Ah) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2) 
-        self.q_s = - (self.x_ac_w) / ((self.CL_alpha_h / self.CL_alpha_Ah) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2) 
+        self.q_s = - (self.x_ac_w) / ((self.CL_alpha_h / self.CL_alpha_Ah) * (1 - self.downwash_gradient) * (self.l_h / self.MAC) * (self.V_ratio) **2)
+        print(f'This is the difference {self.x_ac_w - self.SM}')
+        print(f'This is x_ac {self.x_ac_w}')
     
     def solve_controllability(self):
         '''
@@ -268,8 +272,7 @@ class ScissorPlotSolver:
         # Cm_0_airfoil = -0.349, report with NACA 63-415
         
         # Compute:
-        Cm_ac_w = Cm_0_airfoil * ((self.A * np.cos(self.sweep_LE)**2)/(self.A + 2 * np.cos(self.sweep_LE)))
-
+        Cm_ac_w = Cm_0_airfoil * ((self.A * np.cos(self.sweep_quarter)**2)/(self.A + 2 * np.cos(self.sweep_quarter)))
         '''
         > (2) Flaps <
         mu_1: flap_chord/extended_wing_chord, deflection angle of flap [deg]
@@ -307,9 +310,9 @@ class ScissorPlotSolver:
                 print("ValueError: Enter a valid floating point number.\n")
                 continue
     
-        chord_extension_ratio = 1.9 
+        chord_extension_ratio = 1.25 #TODO: Editted this 
         flapped_ref_ratio     = 1.0
-        flap_span             = 0.3 * self.b #TODO: i made it up
+        flap_span             = 0.58 * self.b #TODO: i made it up
         c_prime               = chord_extension_ratio * self.c_r #TODO: root chord, MAC chord?
         chord_flap            = 0.3 * self.c_r #TODO: i made it up
 
@@ -466,6 +469,11 @@ class ScissorPlotSolver:
                 print("ValueError: Enter a valid floating point number.\n")
                 continue
 
+        self.x_ac_w = 0.27 * self.MAC
+        self.CL_alpha_w = self.CL_alpha_DATCOM(A=self.A, M=self.M_landing)
+        self.CL_alpha_h = self.CL_alpha_DATCOM(A=self.A_h, M=self.M_landing_tail)
+        self.CL_alpha_Ah = self.CL_alpha_w * (1 + 2.15 * self.b_f / self.b) * self.S_net / self.S + np.pi / 2 * self.b_f**2 / self.S
+
         CL_max_clean = 2.55 
         delta_Cl_max = (self.ratio_CL_Cl_max) * CL_max_clean + delta_CL_max
 
@@ -476,7 +484,7 @@ class ScissorPlotSolver:
         > (3) Fuselage <
         '''
         CL_0 = 1.6
-        fuselage_contribution = -1.8 * (1 - 2.5 * self.b_f / self.l_f) * ((np.pi * self.b_f * self.h_f * self.l_f)/(4 * self.S / self.MAC)) * (CL_0 / self.CL_alpha_Ah)
+        fuselage_contribution = -1.8 * (1 - 2.5 * self.b_f / self.l_f) * ((np.pi * self.b_f * self.h_f * self.l_f)/(4 * self.S * self.MAC)) * (CL_0 / self.CL_alpha_Ah)
         
         '''
         > (4) Nacelles <
@@ -490,6 +498,7 @@ class ScissorPlotSolver:
         '''
         flaps_contribution = delta_Cm_ac_flaps * self.deflection_flap * (np.pi / 180)
         Cm_ac = Cm_ac_w + flaps_contribution + fuselage_contribution + nacelle_contribution
+        print(f'Cm_ac {Cm_ac}')
 
         print(f"Displaying information required for reading of lift coefficient of a T-tail (Sh/S=1) for various HLD settings (cruise, take off and landing). (Source: Obert AE4-211 31.8)'...\n")
         print(f"Use printed parameters to read corresponding lift coefficients from a wedge at V_min, landing HLD settings...\n")
@@ -514,6 +523,9 @@ class ScissorPlotSolver:
 
         self.m_c = ((self.CL_h / self.CL_Ah) * (self.l_h / self.MAC) * self.V_ratio**2)**(-1)
         self.q_c = (Cm_ac / self.CL_Ah - self.x_ac_w) / ((self.CL_h / self.CL_Ah) * (self.l_h / self.MAC) * self.V_ratio**2)
+        print(f'This is clh: {self.CL_h}')
+        print(f'This is clah: {self.CL_Ah}')
+        print(f'This is cmac/clah {Cm_ac/self.CL_Ah}')
 
     #TODO: Make sure to solve for "delta_x_cg_acceptable" and plot a horizontal line at the point where
     # the requirement is just met, returning the Sh/S min for satisfying both stability and controllability
@@ -524,17 +536,22 @@ class ScissorPlotSolver:
         Sh/S = m*x_cg + q
         Scale x-axis so we obtain x_cg/MAC
         '''
-        x = np.linspace(0, self.l_f/20, 1000)
-        y_s_SM = self.m_s * x + self.q_s_SM
-        y_s = self.m_s * x + self.q_s
-        y_c = self.m_c * x + self.q_c
+        x_lemac = 15.81
+        x = np.linspace(x_lemac, x_lemac + self.MAC, 1000) #self.l_f/20
+        y_s_SM = self.m_s * (x - x_lemac)  + self.q_s_SM
+        y_s = self.m_s * (x - x_lemac) + self.q_s
+        y_c = self.m_c * (x - x_lemac) + self.q_c
 
         plt.title(f'Scissor Plot - {self.name_aircraft}')
         plt.xlabel('xcg/MAC [-]')
         plt.ylabel('Sh/S [-]')
-        plt.plot(x/self.MAC, y_s_SM, label=f'Stability Curve, SM={self.SM}')
-        plt.plot(x/self.MAC, y_s, label=f'Stability Curve, without SM')
-        plt.plot(x/self.MAC, y_c, label=f'Controllability Curve')
+        # Plotting the results of the stability and controlability curves
+        plt.plot((x - x_lemac)/self.MAC, y_s_SM, label=f'Stability Curve, SM={self.SM}')
+        plt.plot((x - x_lemac)/self.MAC, y_s, label=f'Stability Curve, without SM')
+        plt.plot((x - x_lemac)/self.MAC, y_c, label=f'Controllability Curve')
+
+        #Plotting the results of the cg range
+        plt.axhline(y=0.232, xmin=0.3648431846377054 , xmax=0.8076821009223663, label=f'CG range')
         plt.ylim(0, 1)
         plt.legend()
         plt.show()
