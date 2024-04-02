@@ -14,6 +14,7 @@ from tabulate import tabulate
 import sys # to access the system
 import cv2
 import ctypes
+import os
 
 
 class ScissorPlotSolver:
@@ -313,8 +314,11 @@ class ScissorPlotSolver:
         chord_extension_ratio = 1.25 #TODO: Editted this 
         flapped_ref_ratio     = 1.0
         flap_span             = 0.58 * self.b #TODO: i made it up
-        c_prime               = chord_extension_ratio * self.c_r #TODO: root chord, MAC chord?
-        chord_flap            = 0.3 * self.c_r #TODO: i made it up
+        # Thibault Edit: Function of MAC instead
+        c_prime               = chord_extension_ratio * self.MAC #TODO: root chord, MAC chord?
+        chord_flap            = 0.3 * self.MAC #TODO: i made it up
+        # c_prime               = chord_extension_ratio * self.c_r #TODO: root chord, MAC chord?
+        # chord_flap            = 0.3 * self.c_r #TODO: i made it up
 
         print("\n=== INFORMATION DISPLAY FOR TORENBEEK PLOTS ===\n")
 
@@ -523,35 +527,69 @@ class ScissorPlotSolver:
 
         self.m_c = ((self.CL_h / self.CL_Ah) * (self.l_h / self.MAC) * self.V_ratio**2)**(-1)
         self.q_c = (Cm_ac / self.CL_Ah - self.x_ac_w) / ((self.CL_h / self.CL_Ah) * (self.l_h / self.MAC) * self.V_ratio**2)
-        print(f'This is clh: {self.CL_h}')
-        print(f'This is clah: {self.CL_Ah}')
-        print(f'This is cmac/clah {Cm_ac/self.CL_Ah}')
+        
+        print("\n=== VERIFICATION KEY VALUES ===\n")
+        table_data = [
+            ["CL_h", self.CL_h],
+            ["CL_A-h", self.CL_Ah],
+            ["Cm_ac/CL_A-h", Cm_ac / self.CL_Ah]
+        ]
+        print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
 
     #TODO: Make sure to solve for "delta_x_cg_acceptable" and plot a horizontal line at the point where
     # the requirement is just met, returning the Sh/S min for satisfying both stability and controllability
     # curves. 
-    def plot(self):
+
+    def plot(self, cg_range: np.array):
         '''
         y = m*x + q
         Sh/S = m*x_cg + q
         Scale x-axis so we obtain x_cg/MAC
         '''
         x_lemac = 15.81
-        x = np.linspace(x_lemac, x_lemac + self.MAC, 1000) #self.l_f/20
+        x = np.linspace(x_lemac, x_lemac + self.MAC, 100000) #self.l_f/20
         y_s_SM = self.m_s * (x - x_lemac)  + self.q_s_SM
         y_s = self.m_s * (x - x_lemac) + self.q_s
         y_c = self.m_c * (x - x_lemac) + self.q_c
 
+        y_intersection_LHS = self.m_c * (cg_range[0] * self.MAC) + self.q_c
+        y_intersection_RHS = self.m_s * (cg_range[1] * self.MAC) + self.q_s_SM
+        
+        if y_intersection_LHS > y_intersection_RHS:
+            minimized_tail_sizing = y_intersection_LHS
+        else:
+            minimized_tail_sizing = y_intersection_RHS
+
+        plt.figure(figsize=(8, 5.5))  
         plt.title(f'Scissor Plot - {self.name_aircraft}')
         plt.xlabel('xcg/MAC [-]')
         plt.ylabel('Sh/S [-]')
+        plt.xlim(0, 1)
+        plt.ylim(0, 1)
+        
         # Plotting the results of the stability and controlability curves
-        plt.plot((x - x_lemac)/self.MAC, y_s_SM, label=f'Stability Curve, SM={self.SM}')
-        plt.plot((x - x_lemac)/self.MAC, y_s, label=f'Stability Curve, without SM')
-        plt.plot((x - x_lemac)/self.MAC, y_c, label=f'Controllability Curve')
+        plt.plot((x - x_lemac)/self.MAC, y_s_SM, color='blue', label=f'Stability Curve, SM={self.SM}')
+        plt.plot((x - x_lemac)/self.MAC, y_s, color='dodgerblue', label=f'Stability Curve, without SM')
+        plt.plot((x - x_lemac)/self.MAC, y_c, color='springgreen', label=f'Controllability Curve')
 
         #Plotting the results of the cg range
-        plt.axhline(y=0.232, xmin=0.3648431846377054 , xmax=0.8076821009223663, label=f'CG range')
-        plt.ylim(0, 1)
-        plt.legend()
+        plt.axvline(cg_range[0], linewidth=1, color='magenta', linestyle='--', label='Forward CG')
+        plt.axvline(cg_range[1], linewidth=1, color='magenta', linestyle='--', label='Aft CG')
+        plt.axhline(y=minimized_tail_sizing, xmin=cg_range[0], xmax=cg_range[1], color='magenta', label=f'CG Range')
+        
+        print("\n=== SCISSOR PLOT RESULTS ===\n")
+        table_data = [
+            ["x_cg_forward [% MAC]", round(cg_range[0]*100, 2)],
+            ["x_cg_aft [% MAC]", round(cg_range[1]*100, 2)],
+            ["Sh/S [%]", round(minimized_tail_sizing*100, 2)],
+            ["Target Sh/S (Real Data) [%]", 23.20]
+        ]
+        print(tabulate(table_data, headers=["Coefficient", "Value"], tablefmt="grid"))
+
+        plt.legend(loc='upper left', bbox_to_anchor=(1.05, 1))  # Place legend outside plot area, to the right
+        plt.tight_layout()  # Adjust layout to make room for legend
+        folder_path = 'figures'
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+        plt.savefig(os.path.join(folder_path, f'Scissor_Plot_{self.name_aircraft}.png'))
         plt.show()
